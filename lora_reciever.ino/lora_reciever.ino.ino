@@ -5,9 +5,14 @@
 #define LORA_RST   14
 #define LORA_DIO0  26
 
+#define BUZZER_PIN 25
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
 
   Serial.println();
   Serial.println("LoRa Receiver");
@@ -56,5 +61,10 @@ void loop() {
     Serial.println(" dB");
 
     Serial.println("===========================");
+
+    // Buzzer alert
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(1000);
+    digitalWrite(BUZZER_PIN, LOW);
   }
 }
