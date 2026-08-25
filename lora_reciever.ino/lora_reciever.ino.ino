@@ -62,9 +62,66 @@ void loop() {
 
     Serial.println("===========================");
 
-    // Buzzer alert
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(1000);
-    digitalWrite(BUZZER_PIN, LOW);
+    // Play SOS buzzer pattern
+    playSOS();
   }
+}
+
+
+// ==========================================
+// SOS BUZZER PATTERN
+// ==========================================
+
+void playSOS() {
+
+  // --- S: 3 short beeps ---
+  beep(150);
+  delay(150);
+
+  beep(150);
+  delay(150);
+
+  beep(150);
+
+  // Pause
+  delay(400);
+
+
+  // --- O: 3 long beeps ---
+  beep(500);
+  delay(200);
+
+  beep(500);
+  delay(200);
+
+  beep(500);
+
+  // Pause
+  delay(400);
+
+
+  // --- S: 3 short beeps ---
+  beep(150);
+  delay(150);
+
+  beep(150);
+  delay(150);
+
+  beep(150);
+
+  // End pause
+  delay(1000);
+}
+
+
+// ==========================================
+// BEEP FUNCTION
+// ==========================================
+
+void beep(int duration) {
+
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(duration);
+
+  digitalWrite(BUZZER_PIN, LOW);
 }
