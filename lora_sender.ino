@@ -7,58 +7,87 @@
 
 #define SOS_BUTTON 27
 
-int counter = 0;
+int packetNumber = 0;
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Serial.println("LoRa SOS Sender");
+  Serial.println();
+  Serial.println("================================");
+  Serial.println("       LoRa SOS SENDER");
+  Serial.println("================================");
 
-  // Button setup
   // Button connected between GPIO 27 and GND
   pinMode(SOS_BUTTON, INPUT_PULLUP);
 
-  // Set LoRa pins for ESP32
+  // Set LoRa pins
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
   // Start LoRa at 433 MHz
   if (!LoRa.begin(433E6)) {
-    Serial.println("Starting LoRa failed!");
+    Serial.println("[ERROR] LoRa initialization failed!");
     while (1);
   }
 
-  Serial.println("LoRa initialized successfully!");
+  Serial.println("[OK] LoRa initialized");
+  Serial.println("[OK] Frequency: 433 MHz");
+  Serial.println("[OK] Button: GPIO 27");
+  Serial.println("--------------------------------");
   Serial.println("Waiting for SOS button...");
+  Serial.println();
 }
 
 void loop() {
 
-  // Button is pressed when GPIO goes LOW
+  // Button pressed
   if (digitalRead(SOS_BUTTON) == LOW) {
 
-    Serial.println("SOS BUTTON PRESSED!");
+    packetNumber++;
 
+    Serial.println("================================");
+    Serial.println("SOS BUTTON PRESSED");
+    Serial.print("Sending packet #");
+    Serial.println(packetNumber);
+
+    // Create LoRa packet
     LoRa.beginPacket();
 
     LoRa.print("SOS|");
     LoRa.print("37.7510,37.7510|");
     LoRa.print("ID:R01|");
     LoRa.print("COUNT:");
-    LoRa.print(counter);
+    LoRa.print(packetNumber);
 
-    LoRa.endPacket();
+    // Finish transmission
+    int result = LoRa.endPacket();
 
-    Serial.println("SOS SENT!");
+    if (result == 1) {
+      Serial.println("[SUCCESS] Packet transmitted");
+    } else {
+      Serial.println("[ERROR] Packet transmission failed");
+    }
 
-    counter++;
+    Serial.print("Packet number: ");
+    Serial.println(packetNumber);
 
-    // Wait until button is released
+    Serial.println("Message:");
+    Serial.print("SOS|37.7510,37.7510|ID:R01|COUNT:");
+    Serial.println(packetNumber);
+
+    Serial.println("--------------------------------");
+    Serial.println("Waiting for button release...");
+
+    // Prevent multiple transmissions while holding button
     while (digitalRead(SOS_BUTTON) == LOW) {
       delay(10);
     }
 
-    // Small debounce delay
+    Serial.println("Button released.");
+    Serial.println("Ready for next SOS.");
+    Serial.println();
+    
+    // Debounce
     delay(200);
   }
 }
