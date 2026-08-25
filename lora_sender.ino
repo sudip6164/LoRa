@@ -29,6 +29,7 @@ void setup() {
 
   Serial.println("[OK] LoRa initialized");
   Serial.println("[OK] Frequency: 433 MHz");
+  Serial.println("[OK] Sender: Suvarna");
   Serial.println("[OK] Button: GPIO 27");
   Serial.println("--------------------------------");
   Serial.println("Waiting for SOS button...");
@@ -43,13 +44,17 @@ void loop() {
 
     Serial.println("================================");
     Serial.println("SOS BUTTON PRESSED");
-    Serial.print("Sending packet #");
+    Serial.print("Sending SOS from: Suvarna");
+    Serial.println();
+    Serial.print("Packet #");
     Serial.println(packetNumber);
 
+    // Create LoRa packet
     LoRa.beginPacket();
 
     LoRa.print("SOS|");
-    LoRa.print("37.7510,37.7510|");
+    LoRa.print("NAME:Suvarna|");
+    LoRa.print("LOCATION:37.7510,37.7510|");
     LoRa.print("ID:R01|");
     LoRa.print("COUNT:");
     LoRa.print(packetNumber);
@@ -57,12 +62,13 @@ void loop() {
     int result = LoRa.endPacket();
 
     if (result == 1) {
-      Serial.println("[SUCCESS] Packet transmitted");
+      Serial.println("[SUCCESS] SOS transmitted");
     } else {
-      Serial.println("[ERROR] Packet transmission failed");
+      Serial.println("[ERROR] SOS transmission failed");
     }
 
-    Serial.print("Packet number: ");
+    Serial.println("Message:");
+    Serial.print("SOS|NAME:Suvarna|LOCATION:37.7510,37.7510|ID:R01|COUNT:");
     Serial.println(packetNumber);
 
     Serial.println("--------------------------------");
