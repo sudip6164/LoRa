@@ -18,13 +18,10 @@ void setup() {
   Serial.println("       LoRa SOS SENDER");
   Serial.println("================================");
 
-  // Button connected between GPIO 27 and GND
   pinMode(SOS_BUTTON, INPUT_PULLUP);
 
-  // Set LoRa pins
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
-  // Start LoRa at 433 MHz
   if (!LoRa.begin(433E6)) {
     Serial.println("[ERROR] LoRa initialization failed!");
     while (1);
@@ -40,7 +37,6 @@ void setup() {
 
 void loop() {
 
-  // Button pressed
   if (digitalRead(SOS_BUTTON) == LOW) {
 
     packetNumber++;
@@ -50,7 +46,6 @@ void loop() {
     Serial.print("Sending packet #");
     Serial.println(packetNumber);
 
-    // Create LoRa packet
     LoRa.beginPacket();
 
     LoRa.print("SOS|");
@@ -59,7 +54,6 @@ void loop() {
     LoRa.print("COUNT:");
     LoRa.print(packetNumber);
 
-    // Finish transmission
     int result = LoRa.endPacket();
 
     if (result == 1) {
@@ -71,23 +65,27 @@ void loop() {
     Serial.print("Packet number: ");
     Serial.println(packetNumber);
 
-    Serial.println("Message:");
-    Serial.print("SOS|37.7510,37.7510|ID:R01|COUNT:");
-    Serial.println(packetNumber);
-
     Serial.println("--------------------------------");
-    Serial.println("Waiting for button release...");
 
-    // Prevent multiple transmissions while holding button
+    // Wait for button release
     while (digitalRead(SOS_BUTTON) == LOW) {
       delay(10);
     }
 
     Serial.println("Button released.");
+
+    // 5-second cooldown
+    Serial.println("5-second cooldown started...");
+
+    for (int i = 5; i > 0; i--) {
+      Serial.print("Next SOS available in ");
+      Serial.print(i);
+      Serial.println(" second(s)");
+      delay(1000);
+    }
+
+    Serial.println("Cooldown finished.");
     Serial.println("Ready for next SOS.");
     Serial.println();
-    
-    // Debounce
-    delay(200);
   }
 }
