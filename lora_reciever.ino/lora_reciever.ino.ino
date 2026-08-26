@@ -23,7 +23,6 @@
 // LED
 // ==========================================
 
-// All 3 LEDs are controlled by the same GPIO
 #define LED_PIN 32
 
 
@@ -35,6 +34,33 @@
 #define LCD_SCL 22
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+// ==========================================
+// SOS TIMER
+// ==========================================
+
+const unsigned long SOS_DISPLAY_TIME = 60000;
+
+// Time between LCD information screens
+const unsigned long SCREEN_CHANGE_TIME = 3000;
+
+unsigned long lastSOS = 0;
+unsigned long lastScreenChange = 0;
+
+bool sosActive = false;
+
+int currentScreen = 0;
+
+
+// ==========================================
+// SOS DATA
+// ==========================================
+
+String senderName = "";
+String location = "";
+String deviceID = "";
+String count = "";
 
 
 // ==========================================
@@ -118,6 +144,10 @@ void setup() {
 
 void loop() {
 
+  // ========================================
+  // CHECK FOR LORA PACKET
+  // ========================================
+
   int packetSize = LoRa.parsePacket();
 
 
@@ -127,9 +157,9 @@ void loop() {
     Serial.println("===== PACKET RECEIVED =====");
 
 
-    // ========================================
+    // ======================================
     // READ MESSAGE
-    // ========================================
+    // ======================================
 
     String receivedData = "";
 
@@ -139,18 +169,18 @@ void loop() {
     }
 
 
-    // ========================================
+    // ======================================
     // SIGNAL INFORMATION
-    // ========================================
+    // ======================================
 
     int rssi = LoRa.packetRssi();
 
     float snr = LoRa.packetSnr();
 
 
-    // ========================================
+    // ======================================
     // SERIAL MONITOR
-    // ========================================
+    // ======================================
 
     Serial.print("Message: ");
     Serial.println(receivedData);
@@ -166,41 +196,235 @@ void loop() {
     Serial.println("===========================");
 
 
-    // ========================================
-    // SHOW SOS MESSAGE
-    // ========================================
+    // ======================================
+    // PARSE MESSAGE
+    // ======================================
 
-    showSOSScreen(receivedData);
+    parseMessage(receivedData);
 
 
-    // ========================================
+    // ======================================
+    // START SOS DISPLAY
+    // ======================================
+
+    sosActive = true;
+
+    lastSOS = millis();
+
+    lastScreenChange = millis();
+
+    currentScreen = 0;
+
+
+    // Show first screen immediately
+    showCurrentScreen();
+
+
+    // ======================================
     // PLAY SOS
-    // BUZZER + ALL 3 LEDs
-    // ========================================
+    // ======================================
 
     playSOS();
+  }
 
 
-    // ========================================
-    // SHOW SIGNAL INFORMATION
-    // ========================================
+  // ========================================
+  // CHANGE LCD SCREEN
+  // ========================================
 
-    showSignalScreen(rssi, snr);
+  if (sosActive) {
 
-    delay(2000);
+    if (millis() - lastScreenChange >= SCREEN_CHANGE_TIME) {
+
+      lastScreenChange = millis();
+
+      currentScreen++;
+
+      if (currentScreen > 2) {
+
+        currentScreen = 0;
+      }
+
+      showCurrentScreen();
+    }
 
 
-    // ========================================
-    // RETURN TO IDLE
-    // ========================================
+    // ======================================
+    // 1-MINUTE TIMEOUT
+    // ======================================
 
-    showWaitingScreen();
+    if (millis() - lastSOS >= SOS_DISPLAY_TIME) {
+
+      sosActive = false;
+
+      showWaitingScreen();
+
+      Serial.println("SOS display timeout.");
+      Serial.println("Waiting for new SOS...");
+    }
   }
 }
 
 
 // ==========================================
-// LCD WAITING SCREEN
+// PARSE LORA MESSAGE
+// ==========================================
+
+void parseMessage(String message) {
+
+  senderName = "";
+  location = "";
+  deviceID = "";
+  count = "";
+
+
+  // ----------------------------------------
+  // NAME
+  // ----------------------------------------
+
+  int nameStart = message.indexOf("NAME:");
+
+  if (nameStart != -1) {
+
+    nameStart += 5;
+
+    int nameEnd = message.indexOf("|", nameStart);
+
+    if (nameEnd == -1) {
+
+      nameEnd = message.length();
+    }
+
+    senderName = message.substring(nameStart, nameEnd);
+  }
+
+
+  // ----------------------------------------
+  // LOCATION
+  // ----------------------------------------
+
+  int locationStart = message.indexOf("LOCATION:");
+
+  if (locationStart != -1) {
+
+    locationStart += 9;
+
+    int locationEnd = message.indexOf("|", locationStart);
+
+    if (locationEnd == -1) {
+
+      locationEnd = message.length();
+    }
+
+    location = message.substring(locationStart, locationEnd);
+  }
+
+
+  // ----------------------------------------
+  // ID
+  // ----------------------------------------
+
+  int idStart = message.indexOf("ID:");
+
+  if (idStart != -1) {
+
+    idStart += 3;
+
+    int idEnd = message.indexOf("|", idStart);
+
+    if (idEnd == -1) {
+
+      idEnd = message.length();
+    }
+
+    deviceID = message.substring(idStart, idEnd);
+  }
+
+
+  // ----------------------------------------
+  // COUNT
+  // ----------------------------------------
+
+  int countStart = message.indexOf("COUNT:");
+
+  if (countStart != -1) {
+
+    countStart += 6;
+
+    int countEnd = message.indexOf("|", countStart);
+
+    if (countEnd == -1) {
+
+      countEnd = message.length();
+    }
+
+    count = message.substring(countStart, countEnd);
+  }
+}
+
+
+// ==========================================
+// SHOW CURRENT LCD SCREEN
+// ==========================================
+
+void showCurrentScreen() {
+
+  lcd.clear();
+
+
+  // ========================================
+  // SCREEN 1
+  // ========================================
+
+  if (currentScreen == 0) {
+
+    lcd.setCursor(0, 0);
+
+    lcd.print("SOS | NAME:");
+
+    lcd.setCursor(0, 1);
+
+    lcd.print(senderName);
+  }
+
+
+  // ========================================
+  // SCREEN 2
+  // ========================================
+
+  else if (currentScreen == 1) {
+
+    lcd.setCursor(0, 0);
+
+    lcd.print("LOCATION:");
+
+    lcd.setCursor(0, 1);
+
+    lcd.print(location);
+  }
+
+
+  // ========================================
+  // SCREEN 3
+  // ========================================
+
+  else if (currentScreen == 2) {
+
+    lcd.setCursor(0, 0);
+
+    lcd.print("ID:");
+    lcd.print(deviceID);
+
+    lcd.setCursor(0, 1);
+
+    lcd.print("COUNT:");
+    lcd.print(count);
+  }
+}
+
+
+// ==========================================
+// WAITING SCREEN
 // ==========================================
 
 void showWaitingScreen() {
@@ -212,51 +436,6 @@ void showWaitingScreen() {
 
   lcd.setCursor(0, 1);
   lcd.print("Ready...");
-}
-
-
-// ==========================================
-// LCD SOS SCREEN
-// ==========================================
-
-void showSOSScreen(String message) {
-
-  lcd.clear();
-
-  lcd.setCursor(0, 0);
-  lcd.print("!!! SOS !!!");
-
-  lcd.setCursor(0, 1);
-
-  if (message.length() > 16) {
-
-    message = message.substring(0, 16);
-  }
-
-  lcd.print(message);
-}
-
-
-// ==========================================
-// LCD SIGNAL SCREEN
-// ==========================================
-
-void showSignalScreen(int rssi, float snr) {
-
-  lcd.clear();
-
-  lcd.setCursor(0, 0);
-
-  lcd.print("RSSI:");
-  lcd.print(rssi);
-  lcd.print(" dBm");
-
-
-  lcd.setCursor(0, 1);
-
-  lcd.print("SNR:");
-  lcd.print(snr, 1);
-  lcd.print(" dB");
 }
 
 
@@ -278,8 +457,6 @@ void playSOS() {
 
   beep(150);
 
-
-  // Pause between S and O
   delay(400);
 
 
@@ -295,8 +472,6 @@ void playSOS() {
 
   beep(500);
 
-
-  // Pause between O and S
   delay(400);
 
 
@@ -312,33 +487,23 @@ void playSOS() {
 
   beep(150);
 
-
-  // End
   delay(1000);
 }
 
 
 // ==========================================
-// BEEP + 3 LEDS
+// BEEP + LED
 // ==========================================
 
 void beep(int duration) {
 
-  // Turn ON buzzer
   digitalWrite(BUZZER_PIN, HIGH);
 
-  // Turn ON all 3 LEDs
-  // because they are all connected to GPIO 32
   digitalWrite(LED_PIN, HIGH);
 
-
-  // Keep them ON for the beep duration
   delay(duration);
 
-
-  // Turn OFF buzzer
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Turn OFF all 3 LEDs
   digitalWrite(LED_PIN, LOW);
 }
