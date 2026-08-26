@@ -20,6 +20,14 @@
 
 
 // ==========================================
+// LED
+// ==========================================
+
+// All 3 LEDs are controlled by the same GPIO
+#define LED_PIN 32
+
+
+// ==========================================
 // LCD
 // ==========================================
 
@@ -48,6 +56,14 @@ void setup() {
 
 
   // ========================================
+  // LED
+  // ========================================
+
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+
+  // ========================================
   // LCD
   // ========================================
 
@@ -58,7 +74,6 @@ void setup() {
 
   lcd.clear();
 
-  // Idle screen
   lcd.setCursor(0, 0);
   lcd.print("Waiting for SOS");
 
@@ -119,6 +134,7 @@ void loop() {
     String receivedData = "";
 
     while (LoRa.available()) {
+
       receivedData += (char)LoRa.read();
     }
 
@@ -128,6 +144,7 @@ void loop() {
     // ========================================
 
     int rssi = LoRa.packetRssi();
+
     float snr = LoRa.packetSnr();
 
 
@@ -150,7 +167,7 @@ void loop() {
 
 
     // ========================================
-    // SHOW SOS
+    // SHOW SOS MESSAGE
     // ========================================
 
     showSOSScreen(receivedData);
@@ -158,13 +175,14 @@ void loop() {
 
     // ========================================
     // PLAY SOS
+    // BUZZER + ALL 3 LEDs
     // ========================================
 
     playSOS();
 
 
     // ========================================
-    // SHOW SIGNAL
+    // SHOW SIGNAL INFORMATION
     // ========================================
 
     showSignalScreen(rssi, snr);
@@ -182,7 +200,7 @@ void loop() {
 
 
 // ==========================================
-// WAITING SCREEN
+// LCD WAITING SCREEN
 // ==========================================
 
 void showWaitingScreen() {
@@ -198,21 +216,20 @@ void showWaitingScreen() {
 
 
 // ==========================================
-// SOS SCREEN
+// LCD SOS SCREEN
 // ==========================================
 
 void showSOSScreen(String message) {
 
   lcd.clear();
 
-  // First line
   lcd.setCursor(0, 0);
   lcd.print("!!! SOS !!!");
 
-  // Second line
   lcd.setCursor(0, 1);
 
   if (message.length() > 16) {
+
     message = message.substring(0, 16);
   }
 
@@ -221,7 +238,7 @@ void showSOSScreen(String message) {
 
 
 // ==========================================
-// SIGNAL SCREEN
+// LCD SIGNAL SCREEN
 // ==========================================
 
 void showSignalScreen(int rssi, float snr) {
@@ -229,11 +246,14 @@ void showSignalScreen(int rssi, float snr) {
   lcd.clear();
 
   lcd.setCursor(0, 0);
+
   lcd.print("RSSI:");
   lcd.print(rssi);
   lcd.print(" dBm");
 
+
   lcd.setCursor(0, 1);
+
   lcd.print("SNR:");
   lcd.print(snr, 1);
   lcd.print(" dB");
@@ -241,57 +261,84 @@ void showSignalScreen(int rssi, float snr) {
 
 
 // ==========================================
-// SOS BUZZER
+// SOS MORSE PATTERN
 // ==========================================
 
 void playSOS() {
 
+  // ========================================
   // S = ...
-  beep(150);
-  delay(150);
+  // ========================================
 
   beep(150);
   delay(150);
 
   beep(150);
+  delay(150);
 
+  beep(150);
+
+
+  // Pause between S and O
   delay(400);
 
 
+  // ========================================
   // O = ---
-  beep(500);
-  delay(200);
+  // ========================================
 
   beep(500);
   delay(200);
 
   beep(500);
+  delay(200);
 
+  beep(500);
+
+
+  // Pause between O and S
   delay(400);
 
 
+  // ========================================
   // S = ...
-  beep(150);
-  delay(150);
+  // ========================================
 
   beep(150);
   delay(150);
 
   beep(150);
+  delay(150);
 
+  beep(150);
+
+
+  // End
   delay(1000);
 }
 
 
 // ==========================================
-// BEEP
+// BEEP + 3 LEDS
 // ==========================================
 
 void beep(int duration) {
 
+  // Turn ON buzzer
   digitalWrite(BUZZER_PIN, HIGH);
 
+  // Turn ON all 3 LEDs
+  // because they are all connected to GPIO 32
+  digitalWrite(LED_PIN, HIGH);
+
+
+  // Keep them ON for the beep duration
   delay(duration);
 
+
+  // Turn OFF buzzer
   digitalWrite(BUZZER_PIN, LOW);
+
+  // Turn OFF all 3 LEDs
+  digitalWrite(LED_PIN, LOW);
 }
