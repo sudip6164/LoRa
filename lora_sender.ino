@@ -127,24 +127,15 @@ void loop() {
 // ==========================================
 void waitForAck() {
   Serial.println("[WAIT] Listening for ACK from receiver (up to 35s)...");
-  Serial.println("[WAIT] LED blinks while waiting...");
+  Serial.println("[WAIT] LED blinks only when the ACK arrives...");
 
   LoRa.receive();              // put the RA-02 into RX mode
+  digitalWrite(LED_PIN, LOW);  // LED OFF while waiting
 
   unsigned long startTime = millis();
   bool gotAck = false;
-  bool ledState = false;
-  unsigned long lastBlink = 0;
 
   while (millis() - startTime < ACK_WAIT_TIME) {
-
-    // Blink LED ~5 Hz while waiting
-    if (millis() - lastBlink > 100) {
-      ledState = !ledState;
-      digitalWrite(LED_PIN, ledState);
-      lastBlink = millis();
-    }
-
     int packetSize = LoRa.parsePacket();
     if (packetSize) {
       String data = "";
@@ -164,9 +155,13 @@ void waitForAck() {
 
   if (gotAck) {
     Serial.println("[OK] ACK received - receiver confirmed the alert!");
-    digitalWrite(LED_PIN, HIGH);     // solid ON = confirmed
-    delay(2000);
-    digitalWrite(LED_PIN, LOW);
+    // LED blinks ONLY when the ACK is received (i.e. sent by the receiver)
+    for (int i = 0; i < 6; i++) {
+      digitalWrite(LED_PIN, HIGH);
+      delay(150);
+      digitalWrite(LED_PIN, LOW);
+      delay(150);
+    }
   } else {
     Serial.println("[WARN] No ACK received (timeout). Receiver may be offline.");
     digitalWrite(LED_PIN, LOW);

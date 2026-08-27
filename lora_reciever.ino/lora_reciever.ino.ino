@@ -32,6 +32,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define ACK_BUTTON      33
 #define ACK_WAIT_TIME   30000   // 30 seconds to confirm
 
+// On-board ESP32 LED (GPIO 2): blinks while waiting, solid ON only when ACK sent
+#define LED_PIN         2
+
 // ==========================================
 // WIFI  (edit with your network)
 // ==========================================
@@ -65,6 +68,8 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   pinMode(ACK_BUTTON, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   Wire.begin(LCD_SDA, LCD_SCL);
   lcd.begin(16, 2);
@@ -229,19 +234,22 @@ void waitForAckButton() {
   showConfirmScreen();
   Serial.println("[WAIT] Press button to send ACK back to sender...");
   Serial.println("[WAIT] Timeout in 30 seconds.");
+
   unsigned long startTime = millis();
   bool acked = false;
+
   while (millis() - startTime < ACK_WAIT_TIME) {
     if (digitalRead(ACK_BUTTON) == LOW) {
       delay(50);
       if (digitalRead(ACK_BUTTON) == LOW) {
-        sendAck();
+        sendAck();   // LED blinks HERE, only when the ACK is actually sent
         acked = true;
         break;
       }
     }
     delay(10);
   }
+
   if (!acked) {
     Serial.println("[WARN] No ACK sent (timeout).");
     lcd.clear();
@@ -265,7 +273,13 @@ void sendAck() {
   lcd.clear();
   lcd.setCursor(0, 0); lcd.print("ACK Sent!");
   lcd.setCursor(0, 1); lcd.print("Sender notified");
-  delay(2000);
+  // LED blinks ONLY at the moment the ACK is sent
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(150);
+    digitalWrite(LED_PIN, LOW);
+    delay(150);
+  }
 }
 
 // ==========================================
