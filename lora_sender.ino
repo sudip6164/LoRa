@@ -2,35 +2,35 @@
 #include <LoRa.h>
 
 // ==========================================
-// LORA PINS
+// LORA PINS  (AI-Thinker RA-02 = SX1278, 433 MHz)
+//   RA-02 NSS -> 5, NRESET -> 14, DIO0 -> 26
 // ==========================================
-
 #define LORA_SS    5
 #define LORA_RST   14
 #define LORA_DIO0  26
 
-
 // ==========================================
-// SOS BUTTON
+// SOS BUTTON  (active LOW, internal pull-up)
 // ==========================================
-
 #define SOS_BUTTON 27
 
+// ==========================================
+// ACK INDICATOR LED  (on-board LED on most ESP32 = GPIO 2)
+// ==========================================
+#define LED_PIN        2
+#define ACK_WAIT_TIME  35000   // ms to listen for receiver's ACK (>= receiver's 30s)
 
 // ==========================================
-// SMALL BULB (LED)
+// DEVICE INFO  (edit per sender unit)
 // ==========================================
-
-#define BULB_PIN        2
-#define BLINK_COUNT     5
-#define BLINK_ON_TIME   300
-#define BLINK_OFF_TIME  300
-
+const String DEVICE_NAME   = "Suvarna";
+const String DEVICE_ID     = "R01";
+const float  DEVICE_LAT    = 27.7172;
+const float  DEVICE_LNG    = 85.3240;
 
 int packetNumber = 0;
 
 void setup() {
-
   Serial.begin(115200);
   delay(1000);
 
@@ -39,25 +39,9 @@ void setup() {
   Serial.println("       LoRa SOS SENDER");
   Serial.println("================================");
 
-
-  // ========================================
-  // BUTTON
-  // ========================================
-
   pinMode(SOS_BUTTON, INPUT_PULLUP);
-
-
-  // ========================================
-  // SMALL BULB
-  // ========================================
-
-  pinMode(BULB_PIN, OUTPUT);
-  digitalWrite(BULB_PIN, LOW);
-
-
-  // ========================================
-  // LORA
-  // ========================================
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
@@ -66,69 +50,68 @@ void setup() {
     while (1);
   }
 
+  LoRa.setSpreadingFactor(12);
+  LoRa.setTxPower(17);
+
   Serial.println("[OK] LoRa initialized");
   Serial.println("[OK] Frequency: 433 MHz");
-  Serial.println("[OK] Sender: Suvarna");
-  Serial.println("[OK] Button: GPIO 27");
-  Serial.println("[OK] Bulb: GPIO 2");
+  Serial.print  ("[OK] Sender: ");
+  Serial.println(DEVICE_NAME);
+  Serial.println("[OK] After sending, I wait for the receiver's ACK");
   Serial.println("--------------------------------");
   Serial.println("Waiting for SOS button...");
   Serial.println();
 }
 
-
-// ==========================================
-// MAIN LOOP
-// ==========================================
-
 void loop() {
-
-  // ========================================
-  // LISTEN FOR ACK FROM RECEIVER
-  // ========================================
-
-  checkForAck();
-
-
-  // ========================================
-  // SEND SOS ON BUTTON PRESS
-  // ========================================
 
   if (digitalRead(SOS_BUTTON) == LOW) {
 
-    sendSOS();
+    packetNumber++;
 
+    Serial.println("================================");
+    Serial.println("SOS BUTTON PRESSED");
+    Serial.print("Sending SOS from: ");
+    Serial.println(DEVICE_NAME);
+    Serial.print("Packet #");
+    Serial.println(packetNumber);
 
-    // ========================================
-    // WAIT FOR BUTTON RELEASE
-    // (still listening for ACK)
-    // ========================================
+    String payload = "SOS|";
+    payload += "NAME:" + DEVICE_NAME + "|";
+    payload += "LOCATION:" + String(DEVICE_LAT, 4) + "," + String(DEVICE_LNG, 4) + "|";
+    payload += "ID:" + DEVICE_ID + "|";
+    payload += "COUNT:" + String(packetNumber);
 
+    LoRa.beginPacket();
+    LoRa.print(payload);
+    int result = LoRa.endPacket();
+
+    if (result == 1) {
+      Serial.println("[SUCCESS] SOS transmitted");
+    } else {
+      Serial.println("[ERROR] SOS transmission failed");
+    }
+
+    Serial.print("Message: ");
+    Serial.println(payload);
+    Serial.println("--------------------------------");
+
+    // Wait for the receiver to send back "ACK|SOS RECEIVED"
+    waitForAck();
+
+    // Wait for button release
     while (digitalRead(SOS_BUTTON) == LOW) {
-      checkForAck();
       delay(10);
     }
 
     Serial.println("Button released.");
-
-
-    // ========================================
-    // 5 SECOND COOLDOWN
-    // (still listening for ACK)
-    // ========================================
-
     Serial.println("5-second cooldown started...");
 
     for (int i = 5; i > 0; i--) {
       Serial.print("Next SOS available in ");
       Serial.print(i);
       Serial.println(" second(s)");
-
-      unsigned long start = millis();
-      while (millis() - start < 1000) {
-        checkForAck();
-        delay(10);
-      }
+      delay(1000);
     }
 
     Serial.println("Cooldown finished.");
@@ -137,126 +120,55 @@ void loop() {
   }
 }
 
-
 // ==========================================
-// SEND SOS
+// LISTEN FOR ACK FROM RECEIVER
+//   The receiver replies with "ACK|SOS RECEIVED"
+//   after its operator presses the confirm button.
 // ==========================================
+void waitForAck() {
+  Serial.println("[WAIT] Listening for ACK from receiver (up to 35s)...");
+  Serial.println("[WAIT] LED blinks while waiting...");
 
-void sendSOS() {
+  LoRa.receive();              // put the RA-02 into RX mode
 
-  packetNumber++;
+  unsigned long startTime = millis();
+  bool gotAck = false;
+  bool ledState = false;
+  unsigned long lastBlink = 0;
 
-  Serial.println("================================");
-  Serial.println("SOS BUTTON PRESSED");
-  Serial.print("Sending SOS from: Suvarna");
-  Serial.println();
-  Serial.print("Packet #");
-  Serial.println(packetNumber);
+  while (millis() - startTime < ACK_WAIT_TIME) {
 
-  // Create LoRa packet
-  LoRa.beginPacket();
+    // Blink LED ~5 Hz while waiting
+    if (millis() - lastBlink > 100) {
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState);
+      lastBlink = millis();
+    }
 
-  LoRa.print("SOS|");
-  LoRa.print("NAME:Suvarna|");
-  LoRa.print("LOCATION:37.7510,37.7510|");
-  LoRa.print("ID:R01|");
-  LoRa.print("COUNT:");
-  LoRa.print(packetNumber);
+    int packetSize = LoRa.parsePacket();
+    if (packetSize) {
+      String data = "";
+      while (LoRa.available()) {
+        data += (char)LoRa.read();
+      }
+      Serial.print("[RX] Packet: ");
+      Serial.println(data);
 
-  int result = LoRa.endPacket();
+      if (data.startsWith("ACK")) {
+        gotAck = true;
+        break;
+      }
+    }
+    delay(20);
+  }
 
-  if (result == 1) {
-    Serial.println("[SUCCESS] SOS transmitted");
+  if (gotAck) {
+    Serial.println("[OK] ACK received - receiver confirmed the alert!");
+    digitalWrite(LED_PIN, HIGH);     // solid ON = confirmed
+    delay(2000);
+    digitalWrite(LED_PIN, LOW);
   } else {
-    Serial.println("[ERROR] SOS transmission failed");
-  }
-
-  Serial.println("Message:");
-  Serial.print("SOS|NAME:Suvarna|LOCATION:37.7510,37.7510|ID:R01|COUNT:");
-  Serial.println(packetNumber);
-
-  Serial.println("--------------------------------");
-
-  Serial.println("[WAIT] Blinking bulb when receiver confirms...");
-}
-
-
-// ==========================================
-// CHECK FOR ACK FROM RECEIVER
-// ==========================================
-
-void checkForAck() {
-
-  int packetSize = LoRa.parsePacket();
-
-  if (!packetSize) {
-    return;
-  }
-
-
-  // ========================================
-  // READ MESSAGE
-  // ========================================
-
-  String receivedData = "";
-
-  while (LoRa.available()) {
-    receivedData += (char)LoRa.read();
-  }
-
-
-  // ========================================
-  // SIGNAL INFORMATION
-  // ========================================
-
-  int rssi = LoRa.packetRssi();
-  float snr = LoRa.packetSnr();
-
-  Serial.println();
-  Serial.println("===== PACKET RECEIVED =====");
-  Serial.print("Message: ");
-  Serial.println(receivedData);
-  Serial.print("RSSI: ");
-  Serial.print(rssi);
-  Serial.println(" dBm");
-  Serial.print("SNR: ");
-  Serial.print(snr);
-  Serial.println(" dB");
-
-
-  // ========================================
-  // IS IT AN ACK?
-  // ========================================
-
-  if (receivedData.startsWith("ACK")) {
-
-    Serial.println("[OK] RECEIVER CONFIRMED SOS RECEIVED!");
-    Serial.println("[OK] Blinking bulb...");
-    Serial.println("===========================");
-
-    blinkBulb();
-
-    Serial.println("[OK] Bulb done. Waiting for next SOS.");
-
-  } else {
-    Serial.println("[INFO] Unknown packet ignored.");
-    Serial.println("===========================");
-  }
-}
-
-
-// ==========================================
-// BLINK THE SMALL BULB
-// ==========================================
-
-void blinkBulb() {
-
-  for (int i = 0; i < BLINK_COUNT; i++) {
-
-    digitalWrite(BULB_PIN, HIGH);
-    delay(BLINK_ON_TIME);
-
-    digitalWrite(BULB_PIN, LOW);
-    delay(BLINK_OFF_TIME);
+    Serial.println("[WARN] No ACK received (timeout). Receiver may be offline.");
+    digitalWrite(LED_PIN, LOW);
   }
 }
