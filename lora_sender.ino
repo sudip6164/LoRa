@@ -16,8 +16,22 @@
 
 // ==========================================
 // ACK INDICATOR LED  (on-board LED on most ESP32 = GPIO 2)
+// Many ESP32 clones are active-LOW (LED lights when pin is LOW) -> keep 1.
+// If your LED is ON when the pin is HIGH, change the 1 to 0.
 // ==========================================
 #define LED_PIN        2
+#define LED_ACTIVE_LOW  1
+
+void ledOff()   { digitalWrite(LED_PIN, LED_ACTIVE_LOW ? HIGH : LOW); }
+void ledBlink(int n, int ms) {
+  for (int i = 0; i < n; i++) {
+    digitalWrite(LED_PIN, LED_ACTIVE_LOW ? LOW  : HIGH);
+    delay(ms);
+    digitalWrite(LED_PIN, LED_ACTIVE_LOW ? HIGH : LOW);
+    delay(ms);
+  }
+}
+
 #define ACK_WAIT_TIME  35000   // ms to listen for receiver's ACK (>= receiver's 30s)
 
 // ==========================================
@@ -41,7 +55,7 @@ void setup() {
 
   pinMode(SOS_BUTTON, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  ledOff();
 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
@@ -130,7 +144,7 @@ void waitForAck() {
   Serial.println("[WAIT] LED blinks only when the ACK arrives...");
 
   LoRa.receive();              // put the RA-02 into RX mode
-  digitalWrite(LED_PIN, LOW);  // LED OFF while waiting
+  ledOff();                    // LED OFF while waiting
 
   unsigned long startTime = millis();
   bool gotAck = false;
@@ -156,14 +170,9 @@ void waitForAck() {
   if (gotAck) {
     Serial.println("[OK] ACK received - receiver confirmed the alert!");
     // LED blinks ONLY when the ACK is received (i.e. sent by the receiver)
-    for (int i = 0; i < 6; i++) {
-      digitalWrite(LED_PIN, HIGH);
-      delay(150);
-      digitalWrite(LED_PIN, LOW);
-      delay(150);
-    }
+    ledBlink(6, 150);
   } else {
     Serial.println("[WARN] No ACK received (timeout). Receiver may be offline.");
-    digitalWrite(LED_PIN, LOW);
+    ledOff();
   }
 }

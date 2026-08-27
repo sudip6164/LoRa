@@ -32,8 +32,21 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define ACK_BUTTON      33
 #define ACK_WAIT_TIME   30000   // 30 seconds to confirm
 
-// On-board ESP32 LED (GPIO 2): blinks while waiting, solid ON only when ACK sent
+// On-board ESP32 LED (GPIO 2): OFF at all times except a blink when the ACK is sent.
+// Many ESP32 clones are active-LOW (LED lights when pin is LOW) -> keep this 1.
+// If your LED is ON when the pin is HIGH, change the 1 to 0.
 #define LED_PIN         2
+#define LED_ACTIVE_LOW  1
+
+void ledOff()   { digitalWrite(LED_PIN, LED_ACTIVE_LOW ? HIGH : LOW); }
+void ledBlink(int n, int ms) {
+  for (int i = 0; i < n; i++) {
+    digitalWrite(LED_PIN, LED_ACTIVE_LOW ? LOW  : HIGH);
+    delay(ms);
+    digitalWrite(LED_PIN, LED_ACTIVE_LOW ? HIGH : LOW);
+    delay(ms);
+  }
+}
 
 // ==========================================
 // WIFI  (edit with your network)
@@ -69,7 +82,7 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
   pinMode(ACK_BUTTON, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  ledOff();
 
   Wire.begin(LCD_SDA, LCD_SCL);
   lcd.begin(16, 2);
@@ -274,12 +287,7 @@ void sendAck() {
   lcd.setCursor(0, 0); lcd.print("ACK Sent!");
   lcd.setCursor(0, 1); lcd.print("Sender notified");
   // LED blinks ONLY at the moment the ACK is sent
-  for (int i = 0; i < 6; i++) {
-    digitalWrite(LED_PIN, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN, LOW);
-    delay(150);
-  }
+  ledBlink(6, 150);
 }
 
 // ==========================================
