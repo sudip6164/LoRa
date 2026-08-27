@@ -19,6 +19,7 @@ class SOSAlertSerializer(serializers.ModelSerializer):
             'raw_message',
             'status',
             'received_at',
+            'updated_at',
         ]
         read_only_fields = ['status', 'received_at']
 

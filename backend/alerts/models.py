@@ -18,6 +18,7 @@ class SOSAlert(models.Model):
     raw_message = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     received_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-received_at']

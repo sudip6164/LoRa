@@ -38,8 +38,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 // ==========================================
 // WIFI  (edit with your network)
 // ==========================================
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "mulin_5";
+const char* WIFI_PASSWORD = "CLEB28D72E4";
 
 // ==========================================
 // BACKEND  (data goes to /api/sos/, not /dashboard/)

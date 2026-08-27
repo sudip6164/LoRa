@@ -28,6 +28,29 @@ committed:
 | `DJANGO_SECRET_KEY` | a long random string |
 | `SOS_API_KEY` | the secret the ESP32 sends in `X-API-Key` |
 | `DJANGO_DEBUG` | `False` in production |
+| `DB_ENGINE` | `mysql` (leave unset for local SQLite) |
+| `DB_NAME` | your cPanel MySQL database name |
+| `DB_USER` | your cPanel MySQL user |
+| `DB_PASSWORD` | your cPanel MySQL password |
+| `DB_HOST` | usually `localhost` |
+| `DB_PORT` | `3306` |
+| `CORS_ALLOWED_ORIGINS` | comma-separated Vercel origins, e.g. `https://my-app.vercel.app,https://my-app-git-dev.vercel.app` |
+
+### Database: SQLite (default) vs MySQL
+
+By default the app uses the local `db.sqlite3` file. To use the cPanel MySQL
+database you created, set `DB_ENGINE=mysql` plus the `DB_*` variables above.
+The code switches engine automatically and uses **PyMySQL** (already in
+`requirements.txt`, pure-Python so it installs on shared hosting).
+
+If you only need a quick test, you can skip MySQL and deploy with SQLite by
+simply NOT setting the `DB_*` variables — the app keeps working.
+
+### CORS (for the Next.js / Vercel frontend)
+
+The API is open for `GET` (so the dashboard and your Vercel app can read
+alerts), but the browser will block cross-origin calls unless you list the
+frontend origin in `CORS_ALLOWED_ORIGINS`. Set it on cPanel as shown above.
 
 The domain is already set in `ALLOWED_HOSTS`:
 

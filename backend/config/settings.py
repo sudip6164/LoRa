@@ -9,6 +9,15 @@ from pathlib import Path
 
 import os
 
+# Use PyMySQL as the MySQL driver (pure-Python, installs cleanly on cPanel
+# shared hosting). Falls back silently if PyMySQL is not installed (local dev
+# can stay on SQLite).
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -35,6 +44,38 @@ SOS_API_KEY = os.getenv('SOS_API_KEY', 'wRJLAb4lVXwWRGEWZiMA2xF4v2cu71dk')
 # Timezone shown on the dashboard
 TIME_ZONE = 'Asia/Kathmandu'
 
+# Comma-separated list of frontend origins allowed to call the API (Next.js on
+# Vercel), e.g. "https://my-app.vercel.app,https://my-app-git-dev.vercel.app".
+# If left empty, only same-origin requests work.
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()
+]
+
+# Set to "True" to allow ANY origin (dev only - do not use in production).
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() in (
+    '1', 'true', 'yes', 'on'
+)
+
+
+# ==========================================
+# DATABASE (set these on cPanel to use MySQL)
+# ==========================================
+# Leave DB_ENGINE unset (or any value other than "mysql") to keep using the
+# local SQLite file. On cPanel create a MySQL DB + user, grant all privileges,
+# then set these env vars:
+#   DB_ENGINE=mysql
+#   DB_NAME=<your_mysql_database>
+#   DB_USER=<your_mysql_user>
+#   DB_PASSWORD=<your_mysql_password>
+#   DB_HOST=<usually "localhost">
+#   DB_PORT=3306
+DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite')
+DB_NAME = os.getenv('DB_NAME', str(BASE_DIR / 'db.sqlite3'))
+DB_USER = os.getenv('DB_USER', '')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '3306')
+
 
 # ==========================================
 # CORE SETTINGS (no changes needed)
@@ -48,10 +89,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'alerts',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -87,6 +130,17 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+if DB_ENGINE == 'mysql':
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASSWORD,
+        'HOST': DB_HOST,
+        'PORT': DB_PORT,
+        'OPTIONS': {'charset': 'utf8mb4'},
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
