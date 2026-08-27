@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LoRa SOS Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 22px; color: #f8fafc; }
+    h1 span { color: #ef4444; }
+    .status-pill {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+    .status-pill.online { color: #4ade80; border-color: #166534; }
+    .status-pill.offline { color: #f87171; border-color: #7f1d1d; }
+    .summary {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px 20px;
+      min-width: 140px;
+    }
+    .card .num { font-size: 26px; font-weight: 700; }
+    .card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+    .card.pending .num { color: #fbbf24; }
+    .card.resolved .num { color: #4ade80; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #1e293b;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+    th, td { padding: 12px 14px; text-align: left; font-size: 14px; }
+    thead th {
+      background: #273449;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    tbody tr { border-top: 1px solid #334155; }
+    tr.pending-row { background: rgba(239, 68, 68, 0.08); animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { background: rgba(239, 68, 68, 0.08); }
+      50% { background: rgba(239, 68, 68, 0.18); }
+    }
+    .badge {
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.PENDING { background: #78350f; color: #fbbf24; }
+    .badge.RESOLVED { background: #14532d; color: #4ade80; }
+    .resolve-btn {
+      background: #166534;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .resolve-btn:hover { background: #15803d; }
+    .empty {
+      text-align: center;
+      color: #64748b;
+      padding: 40px !important;
+    }
+    footer {
+      margin-top: 16px;
+      font-size: 12px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>&#128680; LoRa SOS <span>Dashboard</span></h1>
+    <div id="conn" class="status-pill offline">Connecting...</div>
+  </header>
+
+  <div class="summary">
+    <div class="card"><div class="num" id="total">0</div><div class="label">Total Alerts</div></div>
+    <div class="card pending"><div class="num" id="pending">0</div><div class="label">Pending</div></div>
+    <div class="card resolved"><div class="num" id="resolved">0</div><div class="label">Resolved</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Name</th>
+        <th>Device</th>
+        <th>Location (Lat, Lng)</th>
+        <th>Packet</th>
+        <th>RSSI / SNR</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="rows">
+      <tr><td colspan="8" class="empty">Loading alerts...</td></tr>
+    </tbody>
+  </table>
+
+  <footer>Auto-refreshes every 5 seconds &middot; LoRa SOS System</footer>
+
+<script>
+  const rowsEl = document.getElementById('rows');
+  const connEl = document.getElementById('conn');
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  async function resolveAlert(id) {
+    try {
+      await fetch('/dashboard/resolve/' + id + '/', { method: 'POST' });
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function load() {
+    try {
+      const res = await fetch('/api/sos/');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      connEl.textContent = 'Live - updating every 5s';
+      connEl.className = 'status-pill online';
+
+      document.getElementById('total').textContent = data.length;
+      document.getElementById('pending').textContent = data.filter(a => a.status === 'PENDING').length;
+      document.getElementById('resolved').textContent = data.filter(a => a.status === 'RESOLVED').length;
+
+      if (data.length === 0) {
+        rowsEl.innerHTML = '<tr><td colspan="8" class="empty">No SOS alerts yet. Waiting for LoRa packets...</td></tr>';
+        return;
+      }
+
+      rowsEl.innerHTML = data.map(a => {
+        const time = new Date(a.received_at).toLocaleString();
+        const signal = (a.rssi !== null ? a.rssi + ' dBm' : '-') + ' / ' + (a.snr !== null ? a.snr + ' dB' : '-');
+        const loc = a.latitude + ', ' + a.longitude;
+        return `
+          <tr class="${a.status === 'PENDING' ? 'pending-row' : ''}">
+            <td>${esc(time)}</td>
+            <td><strong>${esc(a.name)}</strong></td>
+            <td>${esc(a.device_id || '-')}</td>
+            <td>${esc(loc)}</td>
+            <td>#${esc(a.packet_count)}</td>
+            <td>${esc(signal)}</td>
+            <td><span class="badge ${esc(a.status)}">${esc(a.status)}</span></td>
+            <td>${a.status === 'PENDING'
+              ? `<button class="resolve-btn" onclick="resolveAlert(${a.id})">Resolve</button>`
+              : '-'}</td>
+          </tr>`;
+      }).join('');
+    } catch (err) {
+      connEl.textContent = 'Server offline';
+      connEl.className = 'status-pill offline';
+      console.error(err);
+    }
+  }
+
+  load();
+  setInterval(load, 5000);
+</script>
+
+</body>
+</html>

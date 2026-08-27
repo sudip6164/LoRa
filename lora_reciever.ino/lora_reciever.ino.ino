@@ -30,8 +30,12 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 
 // ==========================================
-// SETUP
+// ACK BUTTON
 // ==========================================
+
+#define ACK_BUTTON      33
+#define ACK_WAIT_TIME   30000   // 30 seconds to confirm
+
 
 void setup() {
 
@@ -45,6 +49,13 @@ void setup() {
 
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
+
+
+  // ========================================
+  // ACK BUTTON
+  // ========================================
+
+  pinMode(ACK_BUTTON, INPUT_PULLUP);
 
 
   // ========================================
@@ -173,11 +184,103 @@ void loop() {
 
 
     // ========================================
+    // WAIT FOR RECEIVER TO CONFIRM (BUTTON)
+    // ========================================
+
+    waitForAckButton();
+
+
+    // ========================================
     // RETURN TO IDLE
     // ========================================
 
     showWaitingScreen();
   }
+}
+
+
+// ==========================================
+// WAIT FOR ACK BUTTON PRESS
+// ==========================================
+
+void waitForAckButton() {
+
+  showConfirmScreen();
+
+  Serial.println("[WAIT] Press button to send ACK back to sender...");
+  Serial.println("[WAIT] Timeout in 30 seconds.");
+
+
+  unsigned long startTime = millis();
+  bool acked = false;
+
+
+  while (millis() - startTime < ACK_WAIT_TIME) {
+
+    if (digitalRead(ACK_BUTTON) == LOW) {
+
+      // Small debounce delay
+      delay(50);
+
+      if (digitalRead(ACK_BUTTON) == LOW) {
+        sendAck();
+        acked = true;
+        break;
+      }
+    }
+
+    delay(10);
+  }
+
+
+  if (!acked) {
+
+    Serial.println("[WARN] No ACK sent (timeout).");
+
+    lcd.clear();
+
+    lcd.setCursor(0, 0);
+    lcd.print("No ACK sent");
+    lcd.setCursor(0, 1);
+    lcd.print("(timeout)");
+
+    delay(1500);
+  }
+}
+
+
+// ==========================================
+// SEND ACK BACK TO SENDER
+// ==========================================
+
+void sendAck() {
+
+  Serial.println("[TX] Sending ACK to sender...");
+
+  LoRa.beginPacket();
+
+  LoRa.print("ACK|");
+  LoRa.print("SOS RECEIVED");
+
+  int result = LoRa.endPacket();
+
+  if (result == 1) {
+    Serial.println("[SUCCESS] ACK transmitted");
+  } else {
+    Serial.println("[ERROR] ACK transmission failed");
+  }
+
+
+  // Show ACK sent screen
+  lcd.clear();
+
+  lcd.setCursor(0, 0);
+  lcd.print("ACK Sent!");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Sender notified");
+
+  delay(2000);
 }
 
 
@@ -237,6 +340,21 @@ void showSignalScreen(int rssi, float snr) {
   lcd.print("SNR:");
   lcd.print(snr, 1);
   lcd.print(" dB");
+}
+
+
+// ==========================================
+// CONFIRM SCREEN
+// ==========================================
+
+void showConfirmScreen() {
+
+  lcd.clear();
+
+  lcd.setCursor(0, 0);
+  lcd.print("SOS Received");
+  lcd.setCursor(0, 1);
+  lcd.print("Press to Confirm");
 }
 
 
