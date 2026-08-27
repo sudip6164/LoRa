@@ -16,16 +16,26 @@ receiver, saves it to a database, and shows a live dashboard.
 
 ---
 
-## Step 1 - Edit settings.py
+## Step 1 - Configure settings (env vars)
 
-Open `config/settings.py` and change only the **EDIT THESE** section:
+`config/settings.py` reads secrets from environment variables, with the
+current values kept only as **local-dev fallbacks**. On cPanel set these in the
+**Setup Python App -> Environment Variables** section so secrets are never
+committed:
+
+| Variable | Value |
+|---|---|
+| `DJANGO_SECRET_KEY` | a long random string |
+| `SOS_API_KEY` | the secret the ESP32 sends in `X-API-Key` |
+| `DJANGO_DEBUG` | `False` in production |
+
+The domain is already set in `ALLOWED_HOSTS`:
 
 ```python
-SECRET_KEY = '<long random string>'       # required
-DEBUG = False                              # on cPanel it must be False
-ALLOWED_HOSTS = ['yourdomain.com']         # your domain or subdomain
-SOS_API_KEY = '<your-secret-api-key>'      # same key goes in the ESP32 code
+ALLOWED_HOSTS = ['backend.nirvix.com'] + (LOCAL_IPS if DEBUG else [])
 ```
+
+Make sure `backend.nirvix.com` points at this app.
 
 ## Step 2 - Test on your PC first (optional but recommended)
 
@@ -42,8 +52,8 @@ python manage.py runserver
 ```bash
 curl -X POST http://127.0.0.1:8000/api/sos/ \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: CHANGE-ME-sos-api-key" \
-  -d "{\"name\":\"Suvarna\",\"latitude\":37.751,\"longitude\":37.751,\"device_id\":\"R01\",\"packet_count\":1,\"rssi\":-82,\"snr\":9.5,\"raw_message\":\"SOS|NAME:Suvarna\"}"
+  -H "X-API-Key: wRJLAb4lVXwWRGEWZiMA2xF4v2cu71dk" \
+  -d "{\"name\":\"Suvarna\",\"latitude\":27.7172,\"longitude\":85.3240,\"device_id\":\"R01\",\"packet_count\":1,\"rssi\":-82,\"snr\":9.5,\"raw_message\":\"SOS|NAME:Suvarna\"}"
 ```
 
 ## Step 3 - Upload to cPanel
@@ -77,24 +87,33 @@ python manage.py collectstatic       # for /admin styling
 
 ## Step 6 - Point the ESP32 at it
 
-In `lora_reciever.ino.ino` set:
+In `lora_reciever.ino.ino` set the three backend constants (WiFi + API already
+wired up with `WiFi.h` + `HTTPClient` + `WiFiClientSecure`):
 
 ```cpp
-const char* SERVER_URL = "http://yourdomain.com/api/sos/";
-const char* API_KEY    = "same-key-as-settings-SOS_API_KEY";
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";          // set this
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";      // set this
+const char* SERVER   = "https://backend.nirvix.com";   // API host
+const char* ENDPOINT = "/api/sos/";                    // capture endpoint
+const char* API_KEY  = "same-key-as-SOS_API_KEY";      // must match backend
 ```
 
-(Wiring/code for WiFi + HTTPClient will be added next.)
+The receiver POSTs JSON to `SERVER + ENDPOINT` on every LoRa packet received.
+With AutoSSL the `https://` URL works; the code calls
+`wifiClient.setInsecure()` to skip certificate verification.
 
 ---
 
 ## Security notes
 
-- Keep `DEBUG = False` in production.
-- Change both `SECRET_KEY` and `SOS_API_KEY` from the defaults.
-- If your host has AutoSSL (HTTPS), you can use `https://` in `SERVER_URL`;
-  the ESP32 code will skip certificate verification.
-- GET endpoints are open so the dashboard can poll; writes need the API key.
+- Set `DJANGO_DEBUG=False` in production (env var).
+- Set `DJANGO_SECRET_KEY` and `SOS_API_KEY` via env vars, not the fallbacks.
+- Keep the `SOS_API_KEY` value identical in the backend env and the receiver's
+  `API_KEY` constant, or posts will get `403`.
+- If your host has AutoSSL (HTTPS), use `https://` in `SERVER`; the ESP32 code
+  calls `wifiClient.setInsecure()` to skip certificate verification (acceptable
+  for this IoT use, but be aware the link is not cert-pinned).
+- `GET` endpoints are open so the dashboard can poll; writes need the API key.
 
 ## Troubleshooting
 

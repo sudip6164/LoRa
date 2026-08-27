@@ -25,10 +25,9 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'GjP(O5ku_9^HV0FoXA+@XDau-GuKmlar5jl
 # True while testing on your PC. Must be False on cPanel.
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes', 'on')
 
-# On cPanel replace '*' with your domain, e.g. ['sos.example.com']
-# For local dev we allow localhost; production uses the domain
+# On cPanel replace with your real domain. Local dev also allows localhost.
 LOCAL_IPS = ['127.0.0.1', 'localhost']
-ALLOWED_HOSTS = ['backend.nirvixtech.com'] + (LOCAL_IPS if DEBUG else [])
+ALLOWED_HOSTS = ['backend.nirvix.com'] + (LOCAL_IPS if DEBUG else [])
 
 # The ESP32 must send this in the "X-API-Key" header.
 SOS_API_KEY = os.getenv('SOS_API_KEY', 'wRJLAb4lVXwWRGEWZiMA2xF4v2cu71dk')

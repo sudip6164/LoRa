@@ -25,6 +25,8 @@ class SOSAlertSerializer(serializers.ModelSerializer):
 
 class SOSStatusSerializer(serializers.ModelSerializer):
 
+    status = serializers.ChoiceField(choices=SOSAlert.STATUS_CHOICES)
+
     class Meta:
         model = SOSAlert
         fields = ['id', 'status']
