@@ -44,6 +44,18 @@ const float  DEVICE_LNG    = 85.3240;
 
 int packetNumber = 0;
 
+// Interrupt flag: set the instant the button is pressed (no polling delay).
+volatile bool sosRequested = false;
+
+void IRAM_ATTR onButtonPress() {
+  static unsigned long lastPress = 0;
+  unsigned long now = millis();
+  if (now - lastPress > 500) {   // simple debounce
+    sosRequested = true;
+    lastPress = now;
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -56,6 +68,7 @@ void setup() {
   pinMode(SOS_BUTTON, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
   ledOff();
+  attachInterrupt(digitalPinToInterrupt(SOS_BUTTON), onButtonPress, FALLING);
 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
@@ -79,7 +92,8 @@ void setup() {
 
 void loop() {
 
-  if (digitalRead(SOS_BUTTON) == LOW) {
+  if (sosRequested) {
+    sosRequested = false;
 
     packetNumber++;
 
