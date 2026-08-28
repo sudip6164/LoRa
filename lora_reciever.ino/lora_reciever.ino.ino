@@ -1,3 +1,13 @@
+// Parsed SOS fields (defined first so Arduino's auto-generated prototypes see it)
+struct SOSData {
+  String name;
+  float  latitude;
+  float  longitude;
+  String device_id;
+  int    packet_count;
+  bool   valid;
+};
+
 #include <SPI.h>
 #include <LoRa.h>
 #include <Wire.h>
@@ -51,28 +61,21 @@ void ledBlink(int n, int ms) {
 // ==========================================
 // WIFI  (edit with your network)
 // ==========================================
-const char* WIFI_SSID     = "mulin_5";
-const char* WIFI_PASSWORD = "CLEB28D72E4";
+// PC is on the "lora" WiFi (IP 10.124.69.16). Use the SAME network for the ESP32.
+const char* WIFI_SSID     = "lora";
+const char* WIFI_PASSWORD = "lora1234";  // <-- set the password for the "lora" WiFi
 
 // ==========================================
 // BACKEND  (data goes to /api/sos/, not /dashboard/)
 // ==========================================
-const char* SERVER   = "https://backend.nirvix.com";
+// PRODUCTION: live backend is at backend.nirvixTECH.com (note the "tech"),
+// served over HTTPS.
+const char* SERVER   = "https://backend.nirvixtech.com";
 const char* ENDPOINT = "/api/sos/";
 const char* API_KEY  = "wRJLAb4lVXwWRGEWZiMA2xF4v2cu71dk";
 
 WiFiClientSecure wifiClient;
 HTTPClient http;
-
-// Parsed SOS fields
-struct SOSData {
-  String name;
-  float  latitude;
-  float  longitude;
-  String device_id;
-  int    packet_count;
-  bool   valid;
-};
 
 void setup() {
   Serial.begin(115200);
@@ -102,7 +105,7 @@ void setup() {
   LoRa.setSpreadingFactor(12);
   Serial.println("LoRa Receiver Started!");
 
-  wifiClient.setInsecure();
+  wifiClient.setInsecure();   // skip TLS cert verification (server cert is fine either way)
   connectWiFi();
 }
 
@@ -150,18 +153,30 @@ void loop() {
 // WIFI
 // ==========================================
 void connectWiFi() {
+  // Already connected -> nothing to do
   if (WiFi.status() == WL_CONNECTED) return;
+
+  // If a connection attempt is still in progress, just wait instead of
+  // calling WiFi.begin() again (that triggers "sta is connecting, cannot set config")
+  if (WiFi.status() == WL_IDLE_STATUS) {
+    delay(500);
+    return;
+  }
+
   Serial.print("Connecting to WiFi ");
   Serial.println(WIFI_SSID);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
   int tries = 0;
-  while (WiFi.status() != WL_CONNECTED && tries < 20) {
+  while (WiFi.status() != WL_CONNECTED && tries < 40) {  // up to 20s
     delay(500); Serial.print("."); tries++;
   }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[OK] WiFi connected");
+    Serial.println("\n[OK] WiFi connected to SSID '" + WiFi.SSID() + "', IP: " + WiFi.localIP().toString());
   } else {
     Serial.println("\n[WARN] WiFi not connected - alerts not sent");
+    WiFi.disconnect(false);  // clear the failed attempt so next call can retry cleanly
   }
 }
 

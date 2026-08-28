@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LoRa SOS Dashboard</title>
+
+  <!-- Leaflet (map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -32,6 +37,7 @@
     }
     .status-pill.online { color: #4ade80; border-color: #166534; }
     .status-pill.offline { color: #f87171; border-color: #7f1d1d; }
+
     .summary {
       display: flex;
       gap: 12px;
@@ -49,6 +55,34 @@
     .card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
     .card.pending .num { color: #fbbf24; }
     .card.resolved .num { color: #4ade80; }
+
+    .layout {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .map-panel { flex: 2 1 480px; display: flex; flex-direction: column; }
+    .table-panel { flex: 1 1 360px; overflow: auto; }
+    #map {
+      flex: 1;
+      min-height: 520px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #1e293b;
+    }
+    .map-foot {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .legend-latest { background: #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.35); }
+    .legend-old { background: #3b82f6; }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -66,11 +100,7 @@
       letter-spacing: 1px;
     }
     tbody tr { border-top: 1px solid #334155; }
-    tr.pending-row { background: rgba(239, 68, 68, 0.08); animation: pulse 2s infinite; }
-    @keyframes pulse {
-      0%, 100% { background: rgba(239, 68, 68, 0.08); }
-      50% { background: rgba(239, 68, 68, 0.18); }
-    }
+    tr.pending-row { background: rgba(239, 68, 68, 0.08); }
     .badge {
       padding: 3px 10px;
       border-radius: 999px;
@@ -89,11 +119,28 @@
       font-size: 12px;
     }
     .resolve-btn:hover { background: #15803d; }
-    .empty {
-      text-align: center;
-      color: #64748b;
-      padding: 40px !important;
+    .empty { text-align: center; color: #64748b; padding: 40px !important; }
+
+    /* Map markers */
+    .sos-dot {
+      width: 14px; height: 14px;
+      background: #3b82f6;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(59,130,246,.4);
     }
+    .sos-pulse {
+      width: 18px; height: 18px;
+      background: #ef4444;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      animation: sosring 1.5s infinite;
+    }
+    @keyframes sosring {
+      0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+      100% { box-shadow: 0 0 0 18px rgba(239,68,68,0); }
+    }
+
     footer {
       margin-top: 16px;
       font-size: 12px;
@@ -114,27 +161,103 @@
     <div class="card resolved"><div class="num" id="resolved">0</div><div class="label">Resolved</div></div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th>Name</th>
-        <th>Device</th>
-        <th>Location (Lat, Lng)</th>
-        <th>Packet</th>
-        <th>RSSI / SNR</th>
-        <th>Status</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody id="rows">
-      <tr><td colspan="8" class="empty">Loading alerts...</td></tr>
-    </tbody>
-  </table>
+  <div class="layout">
+    <!-- MAP -->
+    <div class="map-panel">
+      <div id="map"></div>
+      <div class="map-foot">
+        <span class="legend-dot legend-latest"></span> Latest SOS
+        <span class="legend-dot legend-old" style="margin-left:12px;"></span> Earlier alerts
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Name</th>
+            <th>Device</th>
+            <th>Location (Lat, Lng)</th>
+            <th>Packet</th>
+            <th>RSSI / SNR</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="8" class="empty">Loading alerts...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <footer>Auto-refreshes every 5 seconds &middot; LoRa SOS System</footer>
 
 <script>
+  // ---------- Map setup ----------
+  const map = L.map('map').setView([27.7172, 85.3240], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  const markers = {};           // id -> L.marker
+  let lastLatestId = null;
+
+  function makeIcon(isLatest) {
+    return L.divIcon({
+      className: '',
+      html: isLatest ? '<div class="sos-pulse"></div>' : '<div class="sos-dot"></div>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+  }
+
+  function updateMarkers(data) {
+    const ids = new Set(data.map(a => a.id));
+    // remove markers for alerts no longer present
+    Object.keys(markers).forEach(id => {
+      if (!ids.has(Number(id))) {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+      }
+    });
+
+    data.forEach((a, idx) => {
+      if (a.latitude === 0 && a.longitude === 0) return;   // skip unparsed coords
+      const isLatest = idx === 0;
+      const icon = makeIcon(isLatest);
+      const popup =
+        '<b>' + esc(a.name) + '</b><br>' +
+        'Device: ' + esc(a.device_id || '-') + '<br>' +
+        'Lat: ' + a.latitude + ', Lng: ' + a.longitude + '<br>' +
+        'Packet #' + esc(a.packet_count) + '<br>' +
+        'Status: ' + a.status;
+
+      let m = markers[a.id];
+      if (!m) {
+        m = L.marker([a.latitude, a.longitude], { icon }).addTo(map);
+        m.bindPopup(popup);
+        markers[a.id] = m;
+      } else {
+        m.setLatLng([a.latitude, a.longitude]);
+        m.setIcon(icon);
+        m.setPopupContent(popup);
+      }
+
+      if (isLatest) {
+        m.openPopup();
+        if (lastLatestId !== a.id) {
+          map.panTo([a.latitude, a.longitude]);
+          lastLatestId = a.id;
+        }
+      }
+    });
+  }
+
+  // ---------- Data / table ----------
   const rowsEl = document.getElementById('rows');
   const connEl = document.getElementById('conn');
 
@@ -189,6 +312,8 @@
               : '-'}</td>
           </tr>`;
       }).join('');
+
+      updateMarkers(data);
     } catch (err) {
       connEl.textContent = 'Server offline';
       connEl.className = 'status-pill offline';
